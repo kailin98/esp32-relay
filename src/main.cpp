@@ -2,6 +2,8 @@
 #include <time.h>
 #include <string>
 #include <list>
+#include <Wire.h>
+#include <U8g2lib.h>
 
 // wifi信息结构体
 struct WifiCredentials
@@ -14,7 +16,10 @@ std::string IP;
 // 已知wifi的ssid和password
 const std::list<WifiCredentials> myWifi = {
     {"esp", "asdfghjkl"},
-    {"云镝智网", "yundizhiwang"}};
+    {"云镝智网", "yundizhiwang"},
+    {"ZXW", "12345678"}};
+
+U8G2_SSD1306_128X32_UNIVISION_F_HW_I2C u8g2(U8G2_R0, /* reset=*/U8X8_PIN_NONE, /* clock=*/22, /* data=*/21);
 
 // 函数申明
 void syncTime();
@@ -27,13 +32,15 @@ void scanAndConnectWifi();
 
 void connectWifi(const char *ssid, const char *password);
 
+void displayText(const std::string &text);
+
 /**
  * @brief 初始化
  *
  */
 void setup()
 {
-  Serial.begin(9600);
+  // Serial.begin(9600);
   pinMode(2, OUTPUT);
   digitalWrite(2, HIGH);
   pinMode(15, OUTPUT);
@@ -42,6 +49,10 @@ void setup()
   scanAndConnectWifi();
 
   syncTime();
+
+  u8g2.begin();
+  u8g2.clearBuffer();
+  u8g2.setFont(u8g2_font_ncenB08_tr);
 }
 
 /**
@@ -51,8 +62,8 @@ void setup()
 void loop()
 {
   // 输出事件到串口
-  Serial.println(strToChar(getTime()));
-
+  // Serial.println(strToChar(getTime()));
+  displayText(getTime());
   delay(1000);
 }
 
@@ -63,30 +74,29 @@ void loop()
 void scanAndConnectWifi()
 {
   WiFi.mode(WIFI_STA);
-  Serial.println("Scanning WiFi networks...");
+  displayText("Scanning WiFi...");
   int numNetworks = WiFi.scanNetworks();
-  Serial.print("Found ");
-  Serial.print(numNetworks);
-  Serial.println(" networks");
+  displayText("Found:" + std::to_string(numNetworks) + " networks");
 
   for (int i = 0; i < numNetworks; i++)
   {
     String ssid = WiFi.SSID(i);
-    Serial.print("Found network: ");
-    Serial.println(ssid);
+    // 转化为string
+    std::string ssidStr = ssid.c_str();
+    displayText("Found network: " + ssidStr);
 
     for (const WifiCredentials &wifi : myWifi)
     {
       if (std::string(ssid.c_str()) == wifi.ssid)
       {
-        Serial.println("Match found! Connecting to WiFi...");
+        displayText("Match found! Connecting...");
         connectWifi(wifi.ssid.c_str(), wifi.password.c_str());
         return;
       }
     }
   }
 
-  Serial.println("No matching WiFi found");
+  displayText("No matching WiFi found");
 }
 
 /**
@@ -98,8 +108,8 @@ void scanAndConnectWifi()
 void connectWifi(const char *ssid, const char *password)
 {
   WiFi.begin(ssid, password); // Connect to the network
-  Serial.print("Connecting to ");
-  Serial.print(ssid);
+  std::string ssidStr = ssid.c_str();
+  displayText("Connecting to " + ssidStr + "...");
 
   while (WiFi.status() != WL_CONNECTED)
   { // Wait for the Wi-Fi to connect
@@ -107,9 +117,8 @@ void connectWifi(const char *ssid, const char *password)
     Serial.print('.');
   }
 
-  Serial.println();
-  Serial.println("WiFi connected.");
-  Serial.print("IP address: ");
+  displayText("WiFi connected.");
+  displayText("IP address: ");
   Serial.println(WiFi.localIP());
   IP = WiFi.localIP().toString().c_str();
 }
@@ -142,7 +151,8 @@ std::string getTime()
   localtime_r(&now, &timeinfo);
 
   char timeString[20];
-  strftime(timeString, sizeof(timeString), "%Y-%m-%d %H:%M:%S", &timeinfo);
+  // strftime(timeString, sizeof(timeString), "%Y-%m-%d %H:%M:%S", &timeinfo);
+  strftime(timeString, sizeof(timeString), "%H:%M:%S", &timeinfo);
   return std::string(timeString);
 }
 
@@ -157,4 +167,26 @@ char *strToChar(std::string str)
   char *cstr = new char[str.length() + 1];
   strcpy(cstr, str.c_str());
   return cstr;
+}
+
+/**
+ * @brief 显示字符串
+ *
+ * @param text
+ */
+void displayText(const std::string &text)
+{
+  u8g2.clearBuffer();
+
+  int maxWidth = u8g2.getDisplayWidth();
+  int lineHeight = u8g2.getFontAscent() - u8g2.getFontDescent();
+  int y = lineHeight;
+
+  u8g2.setFontMode(1);  // 选项 1: 忽略填充像素
+  u8g2.setDrawColor(1); // 选项 1: 白色文字
+  u8g2.setCursor(0, y);
+
+  u8g2.println(text.c_str());
+
+  u8g2.sendBuffer();
 }
